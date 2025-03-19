@@ -670,6 +670,10 @@ class Task16Window(Toplevel):
         Button(answer_frame, text="Проверить", 
               command=self.check_answer,
               bg='#58D68D', fg='white').grid(row=2, columnspan=2, pady=15)
+        
+        Button(answer_frame, text="Новый пример", 
+            command=self.new_example,
+            bg='#F4D03F', fg='black').grid(row=3, columnspan=2, pady=15)
 
         # Контекстное меню
         self.context_menu = Menu(self, tearoff=0)
@@ -1047,7 +1051,8 @@ class RobotTaskWindow(Toplevel):
             messagebox.showerror("Ошибка выполнения", str(e))
 
     def process_command(self, cmd):
-        """Обработка одиночной команды"""
+        """Обработка одиночной команды с проверкой на валидность"""
+        cmd = cmd.strip().lower()
         x, y = self.robot_pos
         moves = {
             'вверх': (0, -1),
@@ -1068,7 +1073,10 @@ class RobotTaskWindow(Toplevel):
             if self.is_valid_move(new_x, new_y):
                 self.robot_pos = (new_x, new_y)
             else:
-                raise ValueError(f"Невозможно выполнить: {cmd}")
+                raise ValueError(f"Невозможно выполнить: {cmd} (столкновение со стеной)")
+        else:
+            # Новый блок проверки некорректных команд
+            raise ValueError(f"Некорректная команда: '{cmd}'. Допустимые команды: {', '.join(moves.keys())}")
 
     def is_valid_move(self, x, y):
         """Проверка допустимости перемещения"""
@@ -1143,13 +1151,11 @@ class RobotTaskWindow(Toplevel):
         self.update_idletasks()
 
     def check_solution(self):
-        """Проверка условий с исключением специфических координат"""
+        """Проверка условий с исключением специфических координат и сбросом при ошибке"""
         try:
-            # Координаты стен
             h_y = self.grid_size // 2
             v_x = max(x for x, _ in self.walls['vertical'])
 
-            # Целевые клетки (исключая проблемные координаты)
             target_cells = {
                 (x, h_y + 1) for x in range(v_x) 
                 if (x, h_y + 1) not in {(18, 23), (0, 13), (18, 22), (1, 13), (18, 24)}
@@ -1158,21 +1164,24 @@ class RobotTaskWindow(Toplevel):
                 if (v_x - 1, y) not in {(18, 23), (0, 13), (18, 22), (1, 13), (18, 24)}
             })
 
-            # Удаление проходов
             target_cells.discard((self.passages['horizontal'], h_y + 1))
             target_cells.discard((v_x - 1, self.passages['vertical']))
 
-            # Проверка выполнения
             missing = target_cells - self.robot_path
             
             if not missing:
                 self.show_result("✓ Все условия выполнены!", "green")
             else:
                 print(f"Осталось закрасить: {missing}")
+                self.robot_pos = (2, self.grid_size//2 + 1)
+                self.robot_path = set()
+                self.draw_maze()
+                # self.reset_maze()  # Добавленный сброс состояния
                 self.show_result("✗ Требуется доработка", "red")
 
         except Exception as e:
             print(f"Ошибка проверки: {str(e)}")
+            self.reset_maze()  # Сброс при любых исключениях
             self.show_result("✗ Критическая ошибка", "red")
 
     def show_result(self, message, color):
